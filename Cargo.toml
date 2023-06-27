@@ -11,6 +11,8 @@ anyhow = "1.0.71"
 clap = { version = "4.3.8", features = ["cargo", "derive", "env", "wrap_help"] }
 directories = "5.0.1"
 downloader = { version = "0.2.7", default-features = false, features = ["rustls-tls"] }
+regex = "1.8.4"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.99"
 toml = "0.7.5"
+url = { version = "2.4.0", features = ["serde"] }

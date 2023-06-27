@@ -8,13 +8,29 @@ use std::{
 use anyhow::{bail, ensure, Context};
 use serde::{Deserialize, Serialize};
 
-use crate::PROJ_DIRS;
+use crate::{target_list::TargetList, PROJ_DIRS};
 
 const PERSISTENT_FILE: &str = "persistent_state.json";
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct PersistentState {}
+pub struct PersistentState {
+    list: Option<String>,
+}
+
+impl PersistentState {
+    pub fn list(&self) -> Option<&str> {
+        self.list.as_ref().map(|l| l.as_str())
+    }
+
+    pub fn set_list(&mut self, list: &str) {
+        self.list = Some(list.to_string());
+    }
+
+    pub fn clear_list(&mut self) {
+        self.list = None;
+    }
+}
 
 impl PersistentState {
     pub fn read_from_default_file() -> anyhow::Result<Self> {
@@ -79,6 +95,10 @@ impl PersistentState {
 
 impl Display for PersistentState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "no persistent state yet")
+        write!(
+            f,
+            "current list: {}",
+            self.list.as_ref().map(AsRef::as_ref).unwrap_or("none")
+        )
     }
 }
