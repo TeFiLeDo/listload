@@ -1,6 +1,6 @@
-use std::{path::PathBuf, sync::OnceLock};
+use std::{collections::HashMap, fs, path::PathBuf, sync::OnceLock};
 
-use anyhow::{ensure, Context};
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::Config;
 use directories::{ProjectDirs, UserDirs};
@@ -29,10 +29,7 @@ fn main() -> anyhow::Result<()> {
         .set(user_dirs)
         .ok()
         .context("failed to initialize user directories")?;
-    PROJ_DIRS
-        .set(proj_dirs)
-        .ok()
-        .context("failed to initialize program directories")?;
+    let proj_dirs = PROJ_DIRS.get_or_init(|| proj_dirs);
 
     if let CMD::License = cli.command {
         println!("{}", include_str!("../LICENSE"));
@@ -41,7 +38,7 @@ fn main() -> anyhow::Result<()> {
 
     // prepare for operation
     let cfg = Config::read_from_default_file().context("failed to load config")?;
-    let downloader = cfg.downloader().context("failed to create downloader")?;
+    let mut downloader = cfg.downloader().context("failed to create downloader")?;
     let mut persistent =
         PersistentState::read_from_default_file().context("failed to load persistent state")?;
 
@@ -51,6 +48,71 @@ fn main() -> anyhow::Result<()> {
         }
         CMD::PersistentState => {
             println!("{persistent}");
+        }
+        CMD::Download { name } => {
+            let mut cache = proj_dirs.cache_dir().to_path_buf();
+            cache.push(&format!("{:0>16x}", rand::random::<u64>()));
+            fs::create_dir_all(&cache).context("failed to create cache dir")?;
+
+            let name = name
+                .as_ref()
+                .map(|n| n.as_str())
+                .or(persistent.list())
+                .context("no list specified or selected")?;
+            let list = TargetList::load(&name).context("failed to load list")?;
+            let mut downloads = list.downloads();
+
+            let mut mapping = HashMap::with_capacity(downloads.len());
+            let mut counter = 0;
+            for d in &mut downloads {
+                let mut cache_path = cache.clone();
+                cache_path.push(format!("{counter:0>16x}"));
+                let prev = std::mem::replace(&mut d.file_name, cache_path.clone());
+                mapping.insert(cache_path, prev);
+                counter += 1;
+            }
+
+            let results = downloader
+                .download(&downloads)
+                .context("all downloads failed")?;
+
+            for res in results {
+                if res.is_err() {
+                    eprintln!("{:?}", res.context("download_failed").unwrap_err());
+                    continue;
+                }
+
+                let res = res.unwrap();
+                let res = mapping
+                    .remove(&res.file_name)
+                    .context("target file name missing")
+                    .map(|target| {
+                        if target.is_absolute() {
+                            target
+                        } else {
+                            let mut path = cfg.base_directory.clone();
+                            path.push(target);
+                            path
+                        }
+                    })
+                    .and_then(|target| {
+                        fs::rename(&res.file_name, target).context("failed to move cached result")
+                    });
+
+                if let Err(err) = res {
+                    eprintln!("{:?}", err);
+                }
+            }
+
+            for (leftover, _) in mapping {
+                if let Err(err) =
+                    fs::remove_file(leftover).context("failed to delete leftover cache file")
+                {
+                    eprintln!("{err:?}");
+                }
+            }
+
+            fs::remove_dir(cache).context("failed to delete cache directory")?;
         }
         CMD::List { cmd } => match cmd {
             ListCommand::Create {
@@ -132,6 +194,11 @@ enum CMD {
     License,
     /// Print the current persistent state.
     PersistentState,
+    /// Download a target list.
+    Download {
+        /// The name of the target list. Defaults to the selected list.
+        name: Option<String>,
+    },
     /// Target list operations.
     List {
         #[clap(subcommand)]

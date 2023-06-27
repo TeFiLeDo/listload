@@ -9,7 +9,7 @@ use anyhow::{bail, ensure, Context};
 use indoc::writedoc;
 use serde::{Deserialize, Serialize};
 
-use crate::{target_list::TargetList, PROJ_DIRS};
+use crate::PROJ_DIRS;
 
 const PERSISTENT_FILE: &str = "persistent_state.json";
 

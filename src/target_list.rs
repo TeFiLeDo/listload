@@ -4,7 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Context};
+use downloader::Download;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +28,10 @@ impl TargetList {
 
     pub fn len_targets(&self) -> usize {
         self.inner.targets.len()
+    }
+
+    pub fn downloads(&self) -> Vec<Download> {
+        self.inner.targets.iter().map(|t| t.into()).collect()
     }
 }
 
@@ -54,8 +59,6 @@ impl TargetList {
     }
 
     pub fn new(name: &str, comment: Option<&str>) -> anyhow::Result<Self> {
-        let dirs = PROJ_DIRS.get().expect("directories not initialized");
-
         let dir = Self::list_dir();
         ensure!(
             dir.is_dir() || !dir.exists(),

@@ -50,7 +50,7 @@ impl Display for Target {
     }
 }
 
-impl Into<Download> for Target {
+impl Into<Download> for &Target {
     fn into(self) -> Download {
         match self.urls.len() {
             0 => panic!("target without url"),
