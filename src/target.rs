@@ -50,19 +50,20 @@ impl Display for Target {
     }
 }
 
-impl Into<Download> for &Target {
-    fn into(self) -> Download {
-        match self.urls.len() {
+impl From<&Target> for Download {
+    fn from(value: &Target) -> Self {
+        match value.urls.len() {
             0 => panic!("target without url"),
-            1 => Download::new(self.urls[0].as_str()),
+            1 => Download::new(value.urls[0].as_str()),
             _ => Download::new_mirrored(
-                self.urls
+                value
+                    .urls
                     .iter()
                     .map(|u| u.as_str())
                     .collect::<Vec<_>>()
                     .as_ref(),
             ),
         }
-        .file_name(&self.file)
+        .file_name(&value.file)
     }
 }

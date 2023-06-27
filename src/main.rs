@@ -18,7 +18,7 @@ static USER_DIRS: OnceLock<UserDirs> = OnceLock::new();
 static PROJ_DIRS: OnceLock<ProjectDirs> = OnceLock::new();
 
 fn main() -> anyhow::Result<()> {
-    let cli = CLI::parse();
+    let cli = Cli::parse();
 
     // initialize dirs
     let user_dirs = UserDirs::new().context("failed to discover user directiories")?;
@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
         .context("failed to initialize user directories")?;
     let proj_dirs = PROJ_DIRS.get_or_init(|| proj_dirs);
 
-    if let CMD::License = cli.command {
+    if let Cmd::License = cli.cmd {
         println!("{}", include_str!("../LICENSE"));
         return Ok(());
     }
@@ -42,35 +42,38 @@ fn main() -> anyhow::Result<()> {
     let mut persistent =
         PersistentState::read_from_default_file().context("failed to load persistent state")?;
 
-    match cli.command {
-        CMD::Config => {
+    match cli.cmd {
+        Cmd::Config => {
             println!("{cfg}");
         }
-        CMD::PersistentState => {
+        Cmd::PersistentState => {
             println!("{persistent}");
         }
-        CMD::Download { name } => {
+        Cmd::Download { name } => {
             let mut cache = proj_dirs.cache_dir().to_path_buf();
             cache.push(&format!("{:0>16x}", rand::random::<u64>()));
             fs::create_dir_all(&cache).context("failed to create cache dir")?;
 
             let name = name
-                .as_ref()
-                .map(|n| n.as_str())
+                .as_deref()
                 .or(persistent.list())
                 .context("no list specified or selected")?;
-            let list = TargetList::load(&name).context("failed to load list")?;
+            let list = TargetList::load(name).context("failed to load list")?;
             let mut downloads = list.downloads();
 
-            let mut mapping = HashMap::with_capacity(downloads.len());
-            let mut counter = 0;
-            for d in &mut downloads {
-                let mut cache_path = cache.clone();
-                cache_path.push(format!("{counter:0>16x}"));
-                let prev = std::mem::replace(&mut d.file_name, cache_path.clone());
-                mapping.insert(cache_path, prev);
-                counter += 1;
-            }
+            let mut mapping: HashMap<_, _> = downloads
+                .iter_mut()
+                .enumerate()
+                .map(|(counter, value)| {
+                    let mut cache_path = cache.clone();
+                    cache_path.push(format!("{counter:0>16x}"));
+                    (cache_path, value)
+                })
+                .map(|(cache, down)| {
+                    let target = std::mem::replace(&mut down.file_name, cache.clone());
+                    (cache, target)
+                })
+                .collect();
 
             let results = downloader
                 .download(&downloads)
@@ -124,7 +127,7 @@ fn main() -> anyhow::Result<()> {
 
             fs::remove_dir(cache).context("failed to delete cache directory")?;
         }
-        CMD::List { cmd } => match cmd {
+        Cmd::List { cmd } => match cmd {
             ListCommand::Create {
                 name,
                 keep_current_selected: keep_current_active,
@@ -133,7 +136,7 @@ fn main() -> anyhow::Result<()> {
                 if TargetList::exists(&name) {
                     eprintln!("list already exists");
                 } else {
-                    TargetList::new(&name, comment.as_ref().map(|c| c.as_str()))
+                    TargetList::new(&name, comment.as_deref())
                         .context("failed to create target list")?;
                 }
 
@@ -151,9 +154,9 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         },
-        CMD::Target { cmd } => {
+        Cmd::Target { cmd } => {
             let list = persistent.list().context("no list selected")?;
-            let mut list = TargetList::load(&list).context("failed to load list")?;
+            let mut list = TargetList::load(list).context("failed to load list")?;
 
             match cmd {
                 TargetCommand::Create {
@@ -162,8 +165,8 @@ fn main() -> anyhow::Result<()> {
                     comment,
                     keep_current_selected,
                 } => {
-                    let target = Target::new(url, &file, comment.as_ref().map(|c| c.as_str()))
-                        .context("invalid target")?;
+                    let target =
+                        Target::new(url, &file, comment.as_deref()).context("invalid target")?;
                     list.add_target(target);
 
                     if !keep_current_selected {
@@ -181,7 +184,7 @@ fn main() -> anyhow::Result<()> {
 
             list.save().context("failed to save list")?;
         }
-        CMD::License => {
+        Cmd::License => {
             panic!("late command");
         }
     }
@@ -191,13 +194,13 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Parser)]
 #[clap(about, author, version)]
-struct CLI {
+struct Cli {
     #[clap(subcommand)]
-    command: CMD,
+    cmd: Cmd,
 }
 
 #[derive(Subcommand)]
-enum CMD {
+enum Cmd {
     /// Print the current configuration.
     Config,
     /// Print the EUPL 1.2, under which this program is licensed.

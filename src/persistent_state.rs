@@ -22,7 +22,7 @@ pub struct PersistentState {
 
 impl PersistentState {
     pub fn list(&self) -> Option<&str> {
-        self.list.as_ref().map(|l| l.as_str())
+        self.list.as_deref()
     }
 
     pub fn set_list(&mut self, list: &str) {
@@ -65,8 +65,8 @@ impl PersistentState {
     pub fn read_from_file(path: &Path) -> anyhow::Result<Self> {
         File::open(path)
             .context("failed to open persistent state file")
-            .map(|r| BufReader::new(r))
-            .and_then(|r| Self::read_from(r))
+            .map(BufReader::new)
+            .and_then(Self::read_from)
     }
 
     pub fn read_from(reader: impl Read) -> anyhow::Result<Self> {
@@ -98,7 +98,7 @@ impl PersistentState {
     pub fn save_to_file(&self, path: &Path) -> anyhow::Result<()> {
         File::create(path)
             .context("failed to create persistent state file")
-            .map(|w| BufWriter::new(w))
+            .map(BufWriter::new)
             .and_then(|w| self.save_to(w))
     }
 
