@@ -4,8 +4,10 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use config::Config;
 use directories::{ProjectDirs, UserDirs};
+use persistent_state::PersistentState;
 
 mod config;
+mod persistent_state;
 
 static USER_DIRS: OnceLock<UserDirs> = OnceLock::new();
 static PROJ_DIRS: OnceLock<ProjectDirs> = OnceLock::new();
@@ -35,16 +37,22 @@ fn main() -> anyhow::Result<()> {
     // prepare for operation
     let cfg = Config::read_from_default_file().context("failed to load config")?;
     let downloader = cfg.downloader().context("failed to create downloader")?;
+    let mut persistent =
+        PersistentState::read_from_default_file().context("failed to load persistent state")?;
 
     match cli.command {
         CMD::Config => {
             println!("{cfg}");
-            Ok(())
         }
         CMD::License => {
             panic!("license passed first check");
         }
+        CMD::PersistentState => {
+            println!("{persistent}");
+        }
     }
+
+    persistent.save_to_default_file()
 }
 
 #[derive(Parser)]
@@ -56,8 +64,10 @@ struct CLI {
 
 #[derive(Subcommand)]
 enum CMD {
-    /// Print out the current configuration.
+    /// Print the current configuration.
     Config,
     /// Print the EUPL 1.2, under which this program is licensed.
     License,
+    /// Print the current persistent state.
+    PersistentState,
 }
