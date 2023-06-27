@@ -36,6 +36,10 @@ fn main() -> anyhow::Result<()> {
             println!("{cfg}");
             Ok(())
         }
+        CMD::License => {
+            println!("{}", include_str!("../LICENSE"));
+            Ok(())
+        }
     }
 }
 
@@ -50,4 +54,6 @@ struct CLI {
 enum CMD {
     /// Print out the current configuration.
     Config,
+    /// Print the EUPL 1.2, under which this program is licensed.
+    License,
 }
