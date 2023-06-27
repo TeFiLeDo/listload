@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, File, OpenOptions},
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
@@ -19,6 +19,14 @@ pub struct TargetList {
 impl TargetList {
     pub fn name(&self) -> &str {
         &self.inner.name
+    }
+
+    pub fn add_target(&mut self, target: Target) {
+        self.inner.targets.push(target);
+    }
+
+    pub fn len_targets(&self) -> usize {
+        self.inner.targets.len()
     }
 }
 
@@ -115,7 +123,13 @@ impl TargetList {
     }
 
     pub fn save(&mut self) -> anyhow::Result<()> {
-        self.file.set_len(0);
+        let _ = self
+            .file
+            .set_len(0)
+            .context("failed to clear target list file");
+        self.file
+            .seek(SeekFrom::Start(0))
+            .context("failed to rewind target list file")?;
         serde_json::to_writer(BufWriter::new(&self.file), &self.inner)
             .context("failed to save target list")
     }

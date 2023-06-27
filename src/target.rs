@@ -23,6 +23,11 @@ impl Target {
             "file must be file or nonexistent"
         );
 
+        for url in &urls {
+            let scheme = url.scheme();
+            ensure!(scheme == "http" || scheme == "https", "url is not http(s)");
+        }
+
         Ok(Self {
             urls,
             file: file.to_path_buf(),

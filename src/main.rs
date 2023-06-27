@@ -1,11 +1,13 @@
-use std::sync::OnceLock;
+use std::{path::PathBuf, sync::OnceLock};
 
 use anyhow::{ensure, Context};
 use clap::{Parser, Subcommand};
 use config::Config;
 use directories::{ProjectDirs, UserDirs};
 use persistent_state::PersistentState;
+use target::Target;
 use target_list::TargetList;
+use url::Url;
 
 mod config;
 mod persistent_state;
@@ -50,13 +52,12 @@ fn main() -> anyhow::Result<()> {
         CMD::PersistentState => {
             println!("{persistent}");
         }
-        CMD::List { cmd } => 'list: {
-            if let ListCommand::Create {
+        CMD::List { cmd } => match cmd {
+            ListCommand::Create {
                 name,
-                keep_current_active,
+                keep_current_selected: keep_current_active,
                 comment,
-            } = cmd
-            {
+            } => {
                 if TargetList::exists(&name) {
                     eprintln!("list already exists");
                 } else {
@@ -67,30 +68,42 @@ fn main() -> anyhow::Result<()> {
                 if !keep_current_active {
                     persistent.set_list(&name);
                 }
-
-                break 'list;
-            } else if let ListCommand::Select { name } = cmd {
+            }
+            ListCommand::Select { name } => {
                 if name == "none" {
                     persistent.clear_list();
-                } else if !TargetList::exists(&name) {
-                    eprintln!("list doesn't exist");
-                } else {
+                } else if TargetList::exists(&name) {
                     persistent.set_list(&name);
+                } else {
+                    eprintln!("list doesn't exist");
                 }
-                break 'list;
             }
-
+        },
+        CMD::Target { cmd } => {
             let list = persistent.list().context("no list selected")?;
             let mut list = TargetList::load(&list).context("failed to load list")?;
 
             match cmd {
-                ListCommand::Create {
-                    name: _,
-                    keep_current_active: _,
-                    comment: _,
+                TargetCommand::Create {
+                    file,
+                    url,
+                    comment,
+                    keep_current_selected,
+                } => {
+                    let target = Target::new(url, &file, comment.as_ref().map(|c| c.as_str()))
+                        .context("invalid target")?;
+                    list.add_target(target);
+
+                    if !keep_current_selected {
+                        persistent.set_target(list.len_targets() - 1);
+                    }
                 }
-                | ListCommand::Select { name: _ } => {
-                    panic!("late list command");
+                TargetCommand::Select { index } => {
+                    if index < list.len_targets() {
+                        persistent.set_target(index);
+                    } else {
+                        eprintln!("target doesn't exist");
+                    }
                 }
             }
 
@@ -124,6 +137,11 @@ enum CMD {
         #[clap(subcommand)]
         cmd: ListCommand,
     },
+    /// Individual target operations.
+    Target {
+        #[clap(subcommand)]
+        cmd: TargetCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -140,19 +158,44 @@ enum ListCommand {
         ///
         /// Invalid examples: none, 14, _hi, hi_, h__i
         name: String,
-        /// Don't activate the newly created list.
-        #[clap(long, short)]
-        keep_current_active: bool,
-        /// A comment to remember what a list is for.
+        /// A comment to remember what the list is meant to do.
         #[clap(long, short)]
         comment: Option<String>,
+        /// Don't select the newly created list.
+        #[clap(long, short)]
+        keep_current_selected: bool,
     },
     /// Select an existing list.
+    ///
+    /// List selection is important for the `target` subcommand.
     Select {
         /// The name of the list.
         ///
         /// The special value `none` deselects all lists.
         #[clap(group = "target")]
         name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum TargetCommand {
+    /// Create a new target.
+    Create {
+        /// The local file name.
+        file: PathBuf,
+        /// A list of URLs the file is available at.
+        url: Vec<Url>,
+        /// A comment to remember why the target is in the list.
+        #[clap(long, short)]
+        comment: Option<String>,
+        /// Don't select the newly created target.
+        #[clap(long, short)]
+        keep_current_selected: bool,
+    },
+    /// Select an existing target.
+    /// Target selection is important for the `url` subcommand.
+    Select {
+        /// The index of the target.
+        index: usize,
     },
 }

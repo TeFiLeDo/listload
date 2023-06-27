@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{bail, ensure, Context};
+use indoc::writedoc;
 use serde::{Deserialize, Serialize};
 
 use crate::{target_list::TargetList, PROJ_DIRS};
@@ -16,6 +17,7 @@ const PERSISTENT_FILE: &str = "persistent_state.json";
 #[serde(deny_unknown_fields, default)]
 pub struct PersistentState {
     list: Option<String>,
+    target: Option<usize>,
 }
 
 impl PersistentState {
@@ -25,10 +27,22 @@ impl PersistentState {
 
     pub fn set_list(&mut self, list: &str) {
         self.list = Some(list.to_string());
+        self.target = None;
     }
 
     pub fn clear_list(&mut self) {
         self.list = None;
+        self.target = None;
+    }
+
+    pub fn target(&self) -> Option<usize> {
+        self.target
+    }
+
+    pub fn set_target(&mut self, index: usize) {
+        if self.list.is_some() {
+            self.target = Some(index);
+        }
     }
 }
 
@@ -95,10 +109,15 @@ impl PersistentState {
 
 impl Display for PersistentState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
+        writedoc!(
             f,
-            "current list: {}",
-            self.list.as_ref().map(AsRef::as_ref).unwrap_or("none")
+            "
+            current list:   {} 
+            current target: {}",
+            self.list.as_ref().map(AsRef::as_ref).unwrap_or("none"),
+            self.target
+                .map(|t| t.to_string())
+                .unwrap_or("none".to_string())
         )
     }
 }
