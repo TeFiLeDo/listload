@@ -27,7 +27,12 @@ fn main() -> anyhow::Result<()> {
         .ok()
         .context("failed to initialize program directories")?;
 
-    // initialize downloading
+    if let CMD::License = cli.command {
+        println!("{}", include_str!("../LICENSE"));
+        return Ok(());
+    }
+
+    // prepare for operation
     let cfg = Config::read_from_default_file().context("failed to load config")?;
     let downloader = cfg.downloader().context("failed to create downloader")?;
 
@@ -37,8 +42,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         CMD::License => {
-            println!("{}", include_str!("../LICENSE"));
-            Ok(())
+            panic!("license passed first check");
         }
     }
 }
