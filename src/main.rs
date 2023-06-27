@@ -96,7 +96,17 @@ fn main() -> anyhow::Result<()> {
                         }
                     })
                     .and_then(|target| {
-                        fs::rename(&res.file_name, target).context("failed to move cached result")
+                        fs::hard_link(&res.file_name, &target)
+                            .context("failed to hard-link result") // for same type as below
+                            .or_else(|_| {
+                                fs::copy(&res.file_name, &target)
+                                    .map(|_| ())
+                                    .context("failed to copy result")
+                            })
+                            .and_then(|_| {
+                                fs::remove_file(&res.file_name)
+                                    .context("failed to delete cached result")
+                            })
                     });
 
                 if let Err(err) = res {
