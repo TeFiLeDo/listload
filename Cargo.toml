@@ -3,6 +3,9 @@ name = "listload"
 version = "0.1.0"
 edition = "2021"
 license = "EUPL-1.2"
+authors = ["Adrian Wannenmacher <tfld@tfld.dev>"]
+description = "Download a list of predefined files."
+repository = "https://github.com/TeFiLeDo/listload"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

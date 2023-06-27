@@ -209,12 +209,12 @@ enum CMD {
         /// The name of the target list. Defaults to the selected list.
         name: Option<String>,
     },
-    /// Target list operations.
+    /// Create, select, modify, … a target list.
     List {
         #[clap(subcommand)]
         cmd: ListCommand,
     },
-    /// Individual target operations.
+    /// Create, select, modify, … a target in the selected target list.
     Target {
         #[clap(subcommand)]
         cmd: TargetCommand,
@@ -223,9 +223,9 @@ enum CMD {
 
 #[derive(Subcommand)]
 enum ListCommand {
-    /// Create a new list.
+    /// Create a new target list.
     Create {
-        /// The new lists name.
+        /// A unique name for the target list.
         ///
         /// The name must start with a lowercase letter (`a-z`). After that, it consists of at least
         /// one lowercase letter (`a-z`) or number (`0-9`). It may also contain nonconsecutive
@@ -235,21 +235,18 @@ enum ListCommand {
         ///
         /// Invalid examples: none, 14, _hi, hi_, h__i
         name: String,
-        /// A comment to remember what the list is meant to do.
+        /// A comment to remember what the target list is meant to do.
         #[clap(long, short)]
         comment: Option<String>,
-        /// Don't select the newly created list.
+        /// Don't select the newly created target list.
         #[clap(long, short)]
         keep_current_selected: bool,
     },
-    /// Select an existing list.
-    ///
-    /// List selection is important for the `target` subcommand.
+    /// Select an existing target list.
     Select {
-        /// The name of the list.
+        /// The unique name of the target list.
         ///
-        /// The special value `none` deselects all lists.
-        #[clap(group = "target")]
+        /// The special value `none` unselects the current selection.
         name: String,
     },
 }
@@ -270,7 +267,6 @@ enum TargetCommand {
         keep_current_selected: bool,
     },
     /// Select an existing target.
-    /// Target selection is important for the `url` subcommand.
     Select {
         /// The index of the target.
         index: usize,
