@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf, sync::OnceLock};
+use std::{path::PathBuf, sync::OnceLock};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -9,6 +9,7 @@ use target::Target;
 use target_list::TargetList;
 use url::Url;
 
+mod caching_downloader;
 mod config;
 mod persistent_state;
 mod target;
@@ -29,7 +30,10 @@ fn main() -> anyhow::Result<()> {
         .set(user_dirs)
         .ok()
         .context("failed to initialize user directories")?;
-    let proj_dirs = PROJ_DIRS.get_or_init(|| proj_dirs);
+    PROJ_DIRS
+        .set(proj_dirs)
+        .ok()
+        .context("failedto initialize program directories")?;
 
     if let Cmd::License = cli.cmd {
         println!("{}", include_str!("../LICENSE"));
@@ -38,7 +42,9 @@ fn main() -> anyhow::Result<()> {
 
     // prepare for operation
     let cfg = Config::read_from_default_file().context("failed to load config")?;
-    let mut downloader = cfg.downloader().context("failed to create downloader")?;
+    let mut downloader = cfg
+        .default_caching_downloader()
+        .context("failed to create downloader")?;
     let mut persistent =
         PersistentState::read_from_default_file().context("failed to load persistent state")?;
 
@@ -50,82 +56,18 @@ fn main() -> anyhow::Result<()> {
             println!("{persistent}");
         }
         Cmd::Download { name } => {
-            let mut cache = proj_dirs.cache_dir().to_path_buf();
-            cache.push(&format!("{:0>16x}", rand::random::<u64>()));
-            fs::create_dir_all(&cache).context("failed to create cache dir")?;
-
             let name = name
                 .as_deref()
                 .or(persistent.list())
                 .context("no list specified or selected")?;
-            let list = TargetList::load(name).context("failed to load list")?;
+            let list = TargetList::load(name).context("failed to load target list")?;
             let mut downloads = list.downloads();
 
-            let mut mapping: HashMap<_, _> = downloads
-                .iter_mut()
-                .enumerate()
-                .map(|(counter, value)| {
-                    let mut cache_path = cache.clone();
-                    cache_path.push(format!("{counter:0>16x}"));
-                    (cache_path, value)
-                })
-                .map(|(cache, down)| {
-                    let target = std::mem::replace(&mut down.file_name, cache.clone());
-                    (cache, target)
-                })
-                .collect();
-
-            let results = downloader
-                .download(&downloads)
-                .context("all downloads failed")?;
-
-            for res in results {
-                if res.is_err() {
-                    eprintln!("{:?}", res.context("download_failed").unwrap_err());
-                    continue;
-                }
-
-                let res = res.unwrap();
-                let res = mapping
-                    .remove(&res.file_name)
-                    .context("target file name missing")
-                    .map(|target| {
-                        if target.is_absolute() {
-                            target
-                        } else {
-                            let mut path = cfg.base_directory.clone();
-                            path.push(target);
-                            path
-                        }
-                    })
-                    .and_then(|target| {
-                        fs::hard_link(&res.file_name, &target)
-                            .context("failed to hard-link result") // for same type as below
-                            .or_else(|_| {
-                                fs::copy(&res.file_name, &target)
-                                    .map(|_| ())
-                                    .context("failed to copy result")
-                            })
-                            .and_then(|_| {
-                                fs::remove_file(&res.file_name)
-                                    .context("failed to delete cached result")
-                            })
-                    });
-
+            for res in downloader.download(&mut downloads, None)? {
                 if let Err(err) = res {
                     eprintln!("{:?}", err);
                 }
             }
-
-            for (leftover, _) in mapping {
-                if let Err(err) =
-                    fs::remove_file(leftover).context("failed to delete leftover cache file")
-                {
-                    eprintln!("{err:?}");
-                }
-            }
-
-            fs::remove_dir(cache).context("failed to delete cache directory")?;
         }
         Cmd::List { cmd } => match cmd {
             ListCommand::Create {

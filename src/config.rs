@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context};
 use downloader::Downloader;
 use serde::{Deserialize, Serialize};
 
-use crate::{PROJ_DIRS, USER_DIRS};
+use crate::{caching_downloader::CachingDownloader, PROJ_DIRS, USER_DIRS};
 
 /// Global configuration values.
 #[derive(Debug, Deserialize, Serialize)]
@@ -72,6 +72,16 @@ impl Config {
             .download_folder(&self.base_directory)
             .build()
             .context("failed to build downloader")
+    }
+
+    pub fn default_caching_downloader(&self) -> anyhow::Result<CachingDownloader> {
+        let dirs = PROJ_DIRS.get().expect("directories not initialized");
+        self.caching_downloader(dirs.cache_dir())
+    }
+
+    pub fn caching_downloader(&self, cache: &Path) -> anyhow::Result<CachingDownloader> {
+        self.downloader()
+            .and_then(|d| CachingDownloader::new(d, cache, &self.base_directory))
     }
 }
 
