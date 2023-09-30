@@ -1,11 +1,12 @@
 use std::{
+    collections::HashSet,
     fs::{self, File, OpenOptions},
     io::{BufReader, BufWriter, Seek},
     ops::{Deref, DerefMut},
     path::Path,
 };
 
-use anyhow::{ensure, Context};
+use anyhow::{anyhow, ensure, Context};
 use fs4::FileExt;
 
 use crate::data::DownloadList;
@@ -81,6 +82,40 @@ impl DownloadListStore {
     pub fn delete(name: &str, directory: &Path) -> anyhow::Result<()> {
         fs::remove_file(Self::path_in_directory(directory, name))
             .context("failed to remove list file")
+    }
+
+    /// Get a all list names inside `directory`.
+    pub fn list(directory: &Path) -> anyhow::Result<HashSet<String>> {
+        let ls = fs::read_dir(directory).context("failed to read list file directory")?;
+
+        // 6 steps process:
+        //
+        // 1. turn the entry into a file name
+        ls.map(|pe| {
+            pe.map(|e| {
+                e.file_name()
+                    // 2. turn file name into string
+                    .to_str()
+                    .map(ToString::to_string)
+                    .ok_or(anyhow!("os string not string"))
+                    // 3. try to remove the `.json` suffix from the file name
+                    .map(|n| n.strip_suffix(".json").map(ToString::to_string))
+            })
+        })
+        // 4. remove all files that had no `.json` suffix
+        .filter(|e| match e {
+            Ok(Ok(None)) => false,
+            _ => true,
+        })
+        // 5. flatten read error and os string error
+        .map(|e| match e {
+            Ok(Ok(x)) => Ok(x.expect("none filtered out before")),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e).context("failed to read list file directory entry"),
+        })
+        // 6. handle errors & collect return
+        .collect::<Result<_, _>>()
+        .context("failed to list lists")
     }
 
     fn path_in_directory(directory: &Path, name: &str) -> std::path::PathBuf {

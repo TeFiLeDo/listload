@@ -20,6 +20,25 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         cli::Command::List { command } => match command {
+            cli::ListCommand::Create { name, description } => {
+                let mut list = DownloadListStore::new(name, &data)?;
+
+                list.set_description(description);
+
+                list.save()
+            }
+            cli::ListCommand::Delete { name } => DownloadListStore::delete(&name, &data),
+            cli::ListCommand::Info { name } => {
+                let list = DownloadListStore::load(&name, &data)?;
+
+                println!("name:        {}", list.name());
+                println!("description: {}", list.description());
+
+                Ok(())
+            }
+            cli::ListCommand::List => Ok(DownloadListStore::list(&data)?
+                .into_iter()
+                .for_each(|n| println!("{n}"))),
             cli::ListCommand::Update { name, description } => {
                 let mut list = DownloadListStore::load(&name, &data)?;
 
@@ -29,14 +48,6 @@ fn main() -> anyhow::Result<()> {
 
                 list.save()
             }
-            cli::ListCommand::Create { name, description } => {
-                let mut list = DownloadListStore::new(name, &data)?;
-
-                list.set_description(description);
-
-                list.save()
-            }
-            cli::ListCommand::Delete { name } => DownloadListStore::delete(&name, &data),
         },
     }
 }
