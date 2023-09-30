@@ -9,6 +9,10 @@ pub use list::*;
 pub struct CLI {
     #[clap(subcommand)]
     pub command: Command,
+    /// Print the state before and after executing the specified operation.
+    #[cfg(debug_assertions)]
+    #[clap(long)]
+    pub debug_state: bool,
 }
 
 #[derive(Debug, Subcommand)]

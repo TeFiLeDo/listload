@@ -26,7 +26,7 @@ impl DownloadListStore {
             .read(true)
             .write(true)
             .open(&path)
-            .context("failed to create list file")?;
+            .context(format!("failed to create list file: {}", path.display()))?;
 
         file.lock_exclusive()
             .context("failed to acquire list file lock")?;
@@ -45,7 +45,7 @@ impl DownloadListStore {
             .read(true)
             .write(true)
             .open(&path)
-            .context("failed to open list file")?;
+            .context(format!("failed to open list file: {}", path.display()))?;
 
         file.lock_exclusive()
             .context("failed to acquire list file lock")?;

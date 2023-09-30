@@ -2,6 +2,12 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum ListCommand {
+    /// Activate a download list.
+    #[clap(visible_alias = "a")]
+    Activate {
+        /// The name of the list to activate.
+        name: String,
+    },
     /// Create a new download list.
     #[clap(visible_alias = "c", visible_alias = "new")]
     Create {

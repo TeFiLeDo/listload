@@ -7,38 +7,48 @@ use anyhow::{ensure, Context};
 use clap::Parser;
 use directories::ProjectDirs;
 
-use crate::store::DownloadListStore;
+use crate::{state::State, store::DownloadListStore};
 
 mod cli;
 mod data;
+mod state;
 mod store;
 
 fn main() -> anyhow::Result<()> {
     human_panic::setup_panic!();
     let cli = cli::CLI::parse();
-    let (state, data) = prepare_directories()?;
+
+    let (state_dir, data) = prepare_directories()?;
+    let mut state = State::load(&state_dir).context("failed to read state")?;
+
+    #[cfg(debug_assertions)]
+    if cli.debug_state {
+        dbg!(&state);
+    }
 
     match cli.command {
         cli::Command::List { command } => match command {
+            cli::ListCommand::Activate { name } => {
+                let _ = DownloadListStore::load(&name, &data)?;
+                state.set_active_list(name);
+            }
             cli::ListCommand::Create { name, description } => {
                 let mut list = DownloadListStore::new(name, &data)?;
 
                 list.set_description(description);
 
-                list.save()
+                list.save()?;
             }
-            cli::ListCommand::Delete { name } => DownloadListStore::delete(&name, &data),
+            cli::ListCommand::Delete { name } => DownloadListStore::delete(&name, &data)?,
             cli::ListCommand::Info { name } => {
                 let list = DownloadListStore::load(&name, &data)?;
 
                 println!("name:        {}", list.name());
                 println!("description: {}", list.description());
-
-                Ok(())
             }
-            cli::ListCommand::List => Ok(DownloadListStore::list(&data)?
+            cli::ListCommand::List => DownloadListStore::list(&data)?
                 .into_iter()
-                .for_each(|n| println!("{n}"))),
+                .for_each(|n| println!("{n}")),
             cli::ListCommand::Update { name, description } => {
                 let mut list = DownloadListStore::load(&name, &data)?;
 
@@ -46,10 +56,21 @@ fn main() -> anyhow::Result<()> {
                     list.set_description(description);
                 }
 
-                list.save()
+                list.save()?;
             }
         },
     }
+
+    #[cfg(debug_assertions)]
+    if cli.debug_state {
+        dbg!(&state);
+    }
+
+    if state.changed() {
+        state.save(&state_dir)?;
+    }
+
+    Ok(())
 }
 
 fn prepare_directories() -> anyhow::Result<(PathBuf, PathBuf)> {
